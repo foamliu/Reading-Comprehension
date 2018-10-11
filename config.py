@@ -31,9 +31,9 @@ dropout = 0.05
 batch_size = 100
 train_split = 0.9
 
-train_folder = 'data/ai_challenger_oqmrc2018_trainingset_20180816'
-valid_folder = 'data/ai_challenger_oqmrc2018_validationset_20180816'
-test_a_folder = 'data/ai_challenger_oqmrc2018_testa_20180816'
+train_folder = 'data/ai_challenger_oqmrc_trainingset_20180816'
+valid_folder = 'data/ai_challenger_oqmrc_validationset_20180816'
+test_a_folder = 'data/ai_challenger_oqmrc_testa_20180816'
 train_filename = 'ai_challenger_oqmrc_trainingset.json'
 valid_filename = 'ai_challenger_oqmrc_validationset.json'
 test_a_filename = 'ai_challenger_oqmrc_testa.json'
