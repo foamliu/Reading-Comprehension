@@ -31,16 +31,12 @@ dropout = 0.05
 batch_size = 100
 train_split = 0.9
 
-train_folder = 'data/ai_challenger_translation_train_20170912'
-valid_folder = 'data/ai_challenger_translation_validation_20170912'
-test_a_folder = 'data/ai_challenger_translation_test_a_20170923'
-test_b_folder = 'data/ai_challenger_translation_test_b_20171128'
-train_translation_folder = os.path.join(train_folder, 'translation_train_20170912')
-valid_translation_folder = os.path.join(valid_folder, 'translation_validation_20170912')
-train_translation_en_filename = 'train.en'
-train_translation_zh_filename = 'train.zh'
-valid_translation_en_filename = 'valid.en'
-valid_translation_zh_filename = 'valid.zh'
+train_folder = 'data/ai_challenger_oqmrc2018_trainingset_20180816'
+valid_folder = 'data/ai_challenger_oqmrc2018_validationset_20180816'
+test_a_folder = 'data/ai_challenger_oqmrc2018_testa_20180816'
+train_filename = 'ai_challenger_oqmrc_trainingset.json'
+valid_filename = 'ai_challenger_oqmrc_validationset.json'
+test_a_filename = 'ai_challenger_oqmrc_testa.json'
 
 # num_train_samples = 8206380
 # num_valid_samples = 7034
