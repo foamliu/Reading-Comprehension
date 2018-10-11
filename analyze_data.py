@@ -24,12 +24,12 @@ def analyze():
         length = len(list(seg_list))
         query_lengths.append(length)
 
-    num_bins = 10
+    num_bins = 100
     n, bins, patches = plt.hist(passage_lengths, num_bins, facecolor='blue', alpha=0.5)
     plt.title('Passage Lengths Distribution')
     plt.show()
 
-    num_bins = 10
+    num_bins = 100
     n, bins, patches = plt.hist(query_lengths, num_bins, facecolor='blue', alpha=0.5)
     plt.title('Query Lengths Distribution')
     plt.show()
