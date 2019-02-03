@@ -5,16 +5,38 @@
 
 ## 依赖
 
-- Python 3.5
-- PyTorch 0.4
+- Python 3.6
+- PyTorch 1.0
 
 ## 数据集
 
-我们使用AI Challenger 2018 中的观点型问题阅读理解数据集，超过1000万的英中对照的句子对作为数据集合。其中，训练集合占据绝大部分，验证集合8000对，测试集A 8000条，测试集B 8000条。
+我们使用 AI Challenger 2018 中的观点型问题阅读理解数据集，超过1000万的英中对照的句子对作为数据集合。其中，训练集合占据绝大部分，验证集合8000对，测试集A 8000条，测试集B 8000条。
 
-可以从这里下载：[英中翻译数据集](https://challenger.ai/competition/oqmrc2018)
+可以从这里下载：[观点型问题阅读理解](https://challenger.ai/competition/oqmrc2018)
 
-![image](https://github.com/foamliu/Machine-Translation/raw/master/images/dataset.png)
+数据说明
+每条数据为<问题，篇章，候选答案> 三元组组成
+
+每个问题对应一个篇章（500字以内），以及包含正确答案的三个候选答案
+
+问题：真实用户自然语言问题，从搜索日志中随机选取并由机器初判后人工筛选
+
+篇章：与问题对应的文本段，从问题相关的网页中人工选取
+
+候选答案：人工生成的答案，提供若干（三个）选项，并标注正确答案
+
+数据以JSON格式表示如下样例：
+<pre>
+{
+“query_id”:1,
+“query”:“维生c可以长期吃吗”,
+“url”: “https://wenwen.sogou.com/z/q748559425.htm”,
+“passage”: “每天吃的维生素的量没有超过推荐量的话是没有太大问题的。”,
+“alternatives”:”可以|不可以|无法确定”,
+“answer”:“可以”
+}
+</pre>
+训练集给出上述全部字段，测试集不给answer字段
 
 ## 用法
 
