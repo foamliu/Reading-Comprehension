@@ -1,6 +1,5 @@
-import re
-
 import numpy as np
+from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataloader import default_collate
 from torch.utils.data.dataset import Dataset
 
@@ -68,12 +67,11 @@ class AiChallengerDataset(Dataset):
             contexts, questions, answers = self.test
         return contexts[index], questions[index], answers[index]
 
-    def get_indexed_qa(self, raw_babi):
-        unindexed = get_unindexed_qa(raw_babi)
+    def get_indexed_qa(self, raw_data):
         questions = []
         contexts = []
         answers = []
-        for qa in unindexed:
+        for qa in raw_data:
             context = [c.lower().split() + ['<EOS>'] for c in qa['C']]
 
             for con in context:
@@ -102,54 +100,13 @@ class AiChallengerDataset(Dataset):
 
 
 def get_raw_data():
-    with open(train_path, 'r') as fp:
-        train = fp.read()
-    with open(valid_path, 'r') as fp:
-        valid = fp.read()
-    with open(test_a_path, 'r') as fp:
-        test = fp.read()
+    with open(train_path, 'r') as file:
+        train = file.readlines()
+    with open(valid_path, 'r') as file:
+        valid = file.readlines()
+    with open(test_a_path, 'r') as file:
+        test = file.readlines()
     return train, valid, test
-
-
-def build_vocab(raw_babi):
-    lowered = raw_babi.lower()
-    tokens = re.findall('[a-zA-Z]+', lowered)
-    types = set(tokens)
-    return types
-
-
-# adapted from https://github.com/YerevaNN/Dynamic-memory-networks-in-Theano/
-def get_unindexed_qa(raw_babi):
-    tasks = []
-    task = None
-    babi = raw_babi.strip().split('\n')
-    for i, line in enumerate(babi):
-        id = int(line[0:line.find(' ')])
-        if id == 1:
-            task = {"C": "", "Q": "", "A": "", "S": ""}
-            counter = 0
-            id_map = {}
-
-        line = line.strip()
-        line = line.replace('.', ' . ')
-        line = line[line.find(' ') + 1:]
-        # if not a question
-        if line.find('?') == -1:
-            task["C"] += line + '<line>'
-            id_map[id] = counter
-            counter += 1
-        else:
-            idx = line.find('?')
-            tmp = line[idx + 1:].split('\t')
-            task["Q"] = line[:idx]
-            task["A"] = tmp[1].strip()
-            task["S"] = []  # Supporting facts
-            for num in tmp[2].split():
-                task["S"].append(id_map[int(num.strip())])
-            tc = task.copy()
-            tc['C'] = tc['C'].split('<line>')[:-1]
-            tasks.append(tc)
-    return tasks
 
 
 if __name__ == '__main__':
