@@ -1,112 +1,162 @@
-# encoding=utf-8
-import itertools
+import re
+from glob import glob
 
 import numpy as np
-from torch.utils.data import Dataset
-
-from config import *
-
-samples_path = 'data/samples_train.json'
-samples = json.load(open(samples_path, 'r'))
+from torch.utils.data import DataLoader
+from torch.utils.data.dataloader import default_collate
+from torch.utils.data.dataset import Dataset
 
 
-# np.random.shuffle(samples)
+class adict(dict):
+    def __init__(self, *av, **kav):
+        dict.__init__(self, *av, **kav)
+        self.__dict__ = self
 
 
-def zeroPadding(l, fillvalue=PAD_token):
-    return list(itertools.zip_longest(*l, fillvalue=fillvalue))
+def pad_collate(batch):
+    max_context_sen_len = float('-inf')
+    max_context_len = float('-inf')
+    max_question_len = float('-inf')
+    for elem in batch:
+        context, question, _ = elem
+        max_context_len = max_context_len if max_context_len > len(context) else len(context)
+        max_question_len = max_question_len if max_question_len > len(question) else len(question)
+        for sen in context:
+            max_context_sen_len = max_context_sen_len if max_context_sen_len > len(sen) else len(sen)
+    max_context_len = min(max_context_len, 70)
+    for i, elem in enumerate(batch):
+        _context, question, answer = elem
+        _context = _context[-max_context_len:]
+        context = np.zeros((max_context_len, max_context_sen_len))
+        for j, sen in enumerate(_context):
+            context[j] = np.pad(sen, (0, max_context_sen_len - len(sen)), 'constant', constant_values=0)
+        question = np.pad(question, (0, max_question_len - len(question)), 'constant', constant_values=0)
+        batch[i] = (context, question, answer)
+    return default_collate(batch)
 
 
-def binaryMatrix(l):
-    m = []
-    for i, seq in enumerate(l):
-        m.append([])
-        for token in seq:
-            if token == PAD_token:
-                m[i].append(0)
-            else:
-                m[i].append(1)
-    return m
+class AiChallengerDataset(Dataset):
+    def __init__(self, task_id, mode='train'):
+        self.vocab_path = 'dataset/babi{}_vocab.pkl'.format(task_id)
+        self.mode = mode
+        raw_train, raw_test = get_raw_babi(task_id)
+        self.QA = adict()
+        self.QA.VOCAB = {'<PAD>': 0, '<EOS>': 1}
+        self.QA.IVOCAB = {0: '<PAD>', 1: '<EOS>'}
+        self.train = self.get_indexed_qa(raw_train)
+        self.valid = [self.train[i][int(-len(self.train[i]) / 10):] for i in range(3)]
+        self.train = [self.train[i][:int(9 * len(self.train[i]) / 10)] for i in range(3)]
+        self.test = self.get_indexed_qa(raw_test)
 
-
-# Returns padded input sequence tensor and lengths
-def inputVar(indexes_batch):
-    lengths = torch.tensor([len(indexes) for indexes in indexes_batch])
-    padList = zeroPadding(indexes_batch)
-    padVar = torch.LongTensor(padList)
-    return padVar, lengths
-
-
-# Returns padded target sequence tensor, padding mask, and max target length
-def outputVar(indexes_batch):
-    max_target_len = max([len(indexes) for indexes in indexes_batch])
-    padList = zeroPadding(indexes_batch)
-    mask = binaryMatrix(padList)
-    mask = torch.ByteTensor(mask)
-    padVar = torch.LongTensor(padList)
-    return padVar, mask, max_target_len
-
-
-# Returns all items for a given batch of pairs
-def batch2TrainData(pair_batch):
-    pair_batch.sort(key=lambda x: len(x[0]), reverse=True)
-    input_batch, output_batch = [], []
-    for pair in pair_batch:
-        input_batch.append(pair[0])
-        output_batch.append(pair[1])
-    inp, lengths = inputVar(input_batch)
-    output, mask, max_target_len = outputVar(output_batch)
-    return inp, lengths, output, mask, max_target_len
-
-
-class TranslationDataset(Dataset):
-    def __init__(self, split):
-        self.split = split
-        assert self.split in {'train', 'valid'}
-
-        print('loading {} samples'.format(split))
-        train_count = int(len(samples) * train_split)
-
-        if split == 'train':
-            self.samples = samples[:train_count]
-        else:
-            self.samples = samples[train_count:]
-
-        self.num_batches = len(self.samples) // batch_size
-        np.random.shuffle(self.samples)
-
-        print('count: ' + str(len(self.samples)))
-
-    def __getitem__(self, i):
-        start_idx = i * batch_size
-        pair_batch = []
-
-        for i_batch in range(batch_size):
-            sample = self.samples[start_idx + i_batch]
-            pair_batch.append((sample['input'], sample['output']))
-
-        return batch2TrainData(pair_batch)
+    def set_mode(self, mode):
+        self.mode = mode
 
     def __len__(self):
-        return self.num_batches
+        if self.mode == 'train':
+            return len(self.train[0])
+        elif self.mode == 'valid':
+            return len(self.valid[0])
+        elif self.mode == 'test':
+            return len(self.test[0])
+
+    def __getitem__(self, index):
+        if self.mode == 'train':
+            contexts, questions, answers = self.train
+        elif self.mode == 'valid':
+            contexts, questions, answers = self.valid
+        elif self.mode == 'test':
+            contexts, questions, answers = self.test
+        return contexts[index], questions[index], answers[index]
+
+    def get_indexed_qa(self, raw_babi):
+        unindexed = get_unindexed_qa(raw_babi)
+        questions = []
+        contexts = []
+        answers = []
+        for qa in unindexed:
+            context = [c.lower().split() + ['<EOS>'] for c in qa['C']]
+
+            for con in context:
+                for token in con:
+                    self.build_vocab(token)
+            context = [[self.QA.VOCAB[token] for token in sentence] for sentence in context]
+            question = qa['Q'].lower().split() + ['<EOS>']
+
+            for token in question:
+                self.build_vocab(token)
+            question = [self.QA.VOCAB[token] for token in question]
+
+            self.build_vocab(qa['A'].lower())
+            answer = self.QA.VOCAB[qa['A'].lower()]
+
+            contexts.append(context)
+            questions.append(question)
+            answers.append(answer)
+        return (contexts, questions, answers)
+
+    def build_vocab(self, token):
+        if not token in self.QA.VOCAB:
+            next_index = len(self.QA.VOCAB)
+            self.QA.VOCAB[token] = next_index
+            self.QA.IVOCAB[next_index] = token
+
+
+def get_raw_babi(taskid):
+    paths = glob('data/en-10k/qa{}_*'.format(taskid))
+    for path in paths:
+        if 'train' in path:
+            with open(path, 'r') as fp:
+                train = fp.read()
+        elif 'test' in path:
+            with open(path, 'r') as fp:
+                test = fp.read()
+    return train, test
+
+
+def build_vocab(raw_babi):
+    lowered = raw_babi.lower()
+    tokens = re.findall('[a-zA-Z]+', lowered)
+    types = set(tokens)
+    return types
+
+
+# adapted from https://github.com/YerevaNN/Dynamic-memory-networks-in-Theano/
+def get_unindexed_qa(raw_babi):
+    tasks = []
+    task = None
+    babi = raw_babi.strip().split('\n')
+    for i, line in enumerate(babi):
+        id = int(line[0:line.find(' ')])
+        if id == 1:
+            task = {"C": "", "Q": "", "A": "", "S": ""}
+            counter = 0
+            id_map = {}
+
+        line = line.strip()
+        line = line.replace('.', ' . ')
+        line = line[line.find(' ') + 1:]
+        # if not a question
+        if line.find('?') == -1:
+            task["C"] += line + '<line>'
+            id_map[id] = counter
+            counter += 1
+        else:
+            idx = line.find('?')
+            tmp = line[idx + 1:].split('\t')
+            task["Q"] = line[:idx]
+            task["A"] = tmp[1].strip()
+            task["S"] = []  # Supporting facts
+            for num in tmp[2].split():
+                task["S"].append(id_map[int(num.strip())])
+            tc = task.copy()
+            tc['C'] = tc['C'].split('<line>')[:-1]
+            tasks.append(tc)
+    return tasks
 
 
 if __name__ == '__main__':
-    print('loading {} samples'.format('train'))
-    samples_path = 'data/samples_train.json'
-    samples = json.load(open(samples_path, 'r'))
-    pair_batch = []
-    for i in range(5):
-        sample = samples[i]
-        pair_batch.append((sample['input'], sample['output']))
-
-    # Example for validation
-    small_batch_size = 5
-    batches = batch2TrainData(pair_batch)
-    input_variable, lengths, target_variable, mask, max_target_len = batches
-
-    print("input_variable:", input_variable)
-    print("lengths:", lengths)
-    print("target_variable:", target_variable)
-    print("mask:", mask)
-    print("max_target_len:", max_target_len)
+    dset_train = AiChallengerDataset(20, is_train=True)
+    train_loader = DataLoader(dset_train, batch_size=2, shuffle=True, collate_fn=pad_collate)
+    for batch_idx, data in enumerate(train_loader):
+        contexts, questions, answers = data
+        break

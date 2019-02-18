@@ -1,119 +1,254 @@
+import torch
+import torch.nn as nn
 import torch.nn.functional as F
-from torch import nn
+import torch.nn.init as init
+from torch.autograd import Variable
 
-from config import *
+from config import hidden_size
 
 
-class EncoderRNN(nn.Module):
-    def __init__(self, input_size, hidden_size, n_layers=1, dropout=0):
-        super(EncoderRNN, self).__init__()
-        self.n_layers = n_layers
+def position_encoding(embedded_sentence):
+    '''
+    embedded_sentence.size() -> (#batch, #sentence, #token, #embedding)
+    l.size() -> (#sentence, #embedding)
+    output.size() -> (#batch, #sentence, #embedding)
+    '''
+    _, _, slen, elen = embedded_sentence.size()
+
+    l = [[(1 - s / (slen - 1)) - (e / (elen - 1)) * (1 - 2 * s / (slen - 1)) for e in range(elen)] for s in range(slen)]
+    l = torch.FloatTensor(l)
+    l = l.unsqueeze(0)  # for #batch
+    l = l.unsqueeze(1)  # for #sen
+    l = l.expand_as(embedded_sentence)
+    weighted = embedded_sentence * Variable(l.cuda())
+    return torch.sum(weighted, dim=2).squeeze(2)  # sum with tokens
+
+
+class AttentionGRUCell(nn.Module):
+    def __init__(self, input_size, hidden_size):
+        super(AttentionGRUCell, self).__init__()
         self.hidden_size = hidden_size
-        self.embedding = nn.Embedding(input_size, hidden_size)
+        self.Wr = nn.Linear(input_size, hidden_size)
+        init.xavier_normal_(self.Wr.state_dict()['weight'])
+        self.Ur = nn.Linear(hidden_size, hidden_size)
+        init.xavier_normal_(self.Ur.state_dict()['weight'])
+        self.W = nn.Linear(input_size, hidden_size)
+        init.xavier_normal_(self.W.state_dict()['weight'])
+        self.U = nn.Linear(hidden_size, hidden_size)
+        init.xavier_normal_(self.U.state_dict()['weight'])
 
-        # Initialize GRU; the input_size and hidden_size params are both set to 'hidden_size'
-        #   because our input size is a word embedding with number of features == hidden_size
-        self.gru = nn.GRU(hidden_size, hidden_size, n_layers,
-                          dropout=(0 if n_layers == 1 else dropout), bidirectional=True)
+    def forward(self, fact, C, g):
+        '''
+        fact.size() -> (#batch, #hidden = #embedding)
+        c.size() -> (#hidden, ) -> (#batch, #hidden = #embedding)
+        r.size() -> (#batch, #hidden = #embedding)
+        h_tilda.size() -> (#batch, #hidden = #embedding)
+        g.size() -> (#batch, )
+        '''
 
-    def forward(self, input_seq, input_lengths, hidden=None):
-        # Convert word indexes to embeddings
-        embedded = self.embedding(input_seq)
-        # Pack padded batch of sequences for RNN module
-        packed = torch.nn.utils.rnn.pack_padded_sequence(embedded, input_lengths)
-        # Forward pass through GRU
-        outputs, hidden = self.gru(packed, hidden)
-        # Unpack padding
-        outputs, _ = torch.nn.utils.rnn.pad_packed_sequence(outputs)
-        # Sum bidirectional GRU outputs
-        outputs = outputs[:, :, :self.hidden_size] + outputs[:, :, self.hidden_size:]
-        # Return output and final hidden state
-        return outputs, hidden
+        r = F.sigmoid(self.Wr(fact) + self.Ur(C))
+        h_tilda = F.tanh(self.W(fact) + r * self.U(C))
+        g = g.unsqueeze(1).expand_as(h_tilda)
+        h = g * h_tilda + (1 - g) * C
+        return h
 
 
-# Luong attention layer
-class Attn(torch.nn.Module):
-    def __init__(self, method, hidden_size):
-        super(Attn, self).__init__()
-        self.method = method
-        if self.method not in ['dot', 'general', 'concat']:
-            raise ValueError(self.method, "is not an appropriate attention method.")
+class AttentionGRU(nn.Module):
+    def __init__(self, input_size, hidden_size):
+        super(AttentionGRU, self).__init__()
         self.hidden_size = hidden_size
-        if self.method == 'general':
-            self.attn = torch.nn.Linear(self.hidden_size, hidden_size)
-        elif self.method == 'concat':
-            self.attn = torch.nn.Linear(self.hidden_size * 2, hidden_size)
-            self.v = torch.nn.Parameter(torch.FloatTensor(hidden_size))
+        self.AGRUCell = AttentionGRUCell(input_size, hidden_size)
 
-    def dot_score(self, hidden, encoder_output):
-        return torch.sum(hidden * encoder_output, dim=2)
-
-    def general_score(self, hidden, encoder_output):
-        energy = self.attn(encoder_output)
-        return torch.sum(hidden * energy, dim=2)
-
-    def concat_score(self, hidden, encoder_output):
-        energy = self.attn(torch.cat((hidden.expand(encoder_output.size(0), -1, -1), encoder_output), 2)).tanh()
-        return torch.sum(self.v * energy, dim=2)
-
-    def forward(self, hidden, encoder_outputs):
-        # Calculate the attention weights (energies) based on the given method
-        if self.method == 'general':
-            attn_energies = self.general_score(hidden, encoder_outputs)
-        elif self.method == 'concat':
-            attn_energies = self.concat_score(hidden, encoder_outputs)
-        elif self.method == 'dot':
-            attn_energies = self.dot_score(hidden, encoder_outputs)
-
-        # Transpose max_length and batch_size dimensions
-        attn_energies = attn_energies.t()
-
-        # Return the softmax normalized probability scores (with added dimension)
-        return F.softmax(attn_energies, dim=1).unsqueeze(1)
+    def forward(self, facts, G):
+        '''
+        facts.size() -> (#batch, #sentence, #hidden = #embedding)
+        fact.size() -> (#batch, #hidden = #embedding)
+        G.size() -> (#batch, #sentence)
+        g.size() -> (#batch, )
+        C.size() -> (#batch, #hidden)
+        '''
+        batch_num, sen_num, embedding_size = facts.size()
+        C = Variable(torch.zeros(self.hidden_size)).cuda()
+        for sid in range(sen_num):
+            fact = facts[:, sid, :]
+            g = G[:, sid]
+            if sid == 0:
+                C = C.unsqueeze(0).expand_as(fact)
+            C = self.AGRUCell(fact, C, g)
+        return C
 
 
-class LuongAttnDecoderRNN(nn.Module):
-    def __init__(self, attn_model, hidden_size, output_size, n_layers=1, dropout=0.1):
-        super(LuongAttnDecoderRNN, self).__init__()
+class EpisodicMemory(nn.Module):
+    def __init__(self, hidden_size):
+        super(EpisodicMemory, self).__init__()
+        self.AGRU = AttentionGRU(hidden_size, hidden_size)
+        self.z1 = nn.Linear(4 * hidden_size, hidden_size)
+        self.z2 = nn.Linear(hidden_size, 1)
+        self.next_mem = nn.Linear(3 * hidden_size, hidden_size)
+        init.xavier_normal_(self.z1.state_dict()['weight'])
+        init.xavier_normal_(self.z2.state_dict()['weight'])
+        init.xavier_normal_(self.next_mem.state_dict()['weight'])
 
-        # Keep for reference
-        self.attn_model = attn_model
+    def make_interaction(self, facts, questions, prevM):
+        '''
+        facts.size() -> (#batch, #sentence, #hidden = #embedding)
+        questions.size() -> (#batch, 1, #hidden)
+        prevM.size() -> (#batch, #sentence = 1, #hidden = #embedding)
+        z.size() -> (#batch, #sentence, 4 x #embedding)
+        G.size() -> (#batch, #sentence)
+        '''
+        batch_num, sen_num, embedding_size = facts.size()
+        questions = questions.expand_as(facts)
+        prevM = prevM.expand_as(facts)
+
+        z = torch.cat([
+            facts * questions,
+            facts * prevM,
+            torch.abs(facts - questions),
+            torch.abs(facts - prevM)
+        ], dim=2)
+
+        z = z.view(-1, 4 * embedding_size)
+
+        G = F.tanh(self.z1(z))
+        G = self.z2(G)
+        G = G.view(batch_num, -1)
+        G = F.softmax(G, dim=-1)
+
+        return G
+
+    def forward(self, facts, questions, prevM):
+        '''
+        facts.size() -> (#batch, #sentence, #hidden = #embedding)
+        questions.size() -> (#batch, #sentence = 1, #hidden)
+        prevM.size() -> (#batch, #sentence = 1, #hidden = #embedding)
+        G.size() -> (#batch, #sentence)
+        C.size() -> (#batch, #hidden)
+        concat.size() -> (#batch, 3 x #embedding)
+        '''
+        G = self.make_interaction(facts, questions, prevM)
+        C = self.AGRU(facts, G)
+        concat = torch.cat([prevM.squeeze(1), C, questions.squeeze(1)], dim=1)
+        next_mem = F.relu(self.next_mem(concat))
+        next_mem = next_mem.unsqueeze(1)
+        return next_mem
+
+
+class QuestionModule(nn.Module):
+    def __init__(self, vocab_size, hidden_size):
+        super(QuestionModule, self).__init__()
+        self.gru = nn.GRU(hidden_size, hidden_size, batch_first=True)
+
+    def forward(self, questions, word_embedding):
+        '''
+        questions.size() -> (#batch, #token)
+        word_embedding() -> (#batch, #token, #embedding)
+        gru() -> (1, #batch, #hidden)
+        '''
+        questions = word_embedding(questions)
+        _, questions = self.gru(questions)
+        questions = questions.transpose(0, 1)
+        return questions
+
+
+class InputModule(nn.Module):
+    def __init__(self, vocab_size, hidden_size):
+        super(InputModule, self).__init__()
         self.hidden_size = hidden_size
-        self.output_size = output_size
-        self.n_layers = n_layers
-        self.dropout = dropout
+        self.gru = nn.GRU(hidden_size, hidden_size, bidirectional=True, batch_first=True)
+        for name, param in self.gru.state_dict().items():
+            if 'weight' in name: init.xavier_normal_(param)
+        self.dropout = nn.Dropout(0.1)
 
-        # Define layers
-        self.embedding = nn.Embedding(output_size, hidden_size)
-        self.embedding_dropout = nn.Dropout(dropout)
-        self.gru = nn.GRU(hidden_size, hidden_size, n_layers, dropout=(0 if n_layers == 1 else dropout))
-        self.concat = nn.Linear(hidden_size * 2, hidden_size)
-        self.out = nn.Linear(hidden_size, output_size)
+    def forward(self, contexts, word_embedding):
+        '''
+        contexts.size() -> (#batch, #sentence, #token)
+        word_embedding() -> (#batch, #sentence x #token, #embedding)
+        position_encoding() -> (#batch, #sentence, #embedding)
+        facts.size() -> (#batch, #sentence, #hidden = #embedding)
+        '''
+        batch_num, sen_num, token_num = contexts.size()
 
-        self.attn = Attn(attn_model, hidden_size)
+        contexts = contexts.view(batch_num, -1)
+        contexts = word_embedding(contexts)
 
-    def forward(self, input_step, last_hidden, encoder_outputs):
-        # Note: we run this one step (word) at a time
-        # Get embedding of current input word
-        embedded = self.embedding(input_step)
-        embedded = self.embedding_dropout(embedded)
-        # Forward through unidirectional GRU
-        rnn_output, hidden = self.gru(embedded, last_hidden)
-        # Calculate attention weights from the current GRU output
-        attn_weights = self.attn(rnn_output, encoder_outputs)
-        # Multiply attention weights to encoder outputs to get new "weighted sum" context vector
-        context = attn_weights.bmm(encoder_outputs.transpose(0, 1))
-        # Concatenate weighted context vector and GRU output using Luong eq. 5
-        rnn_output = rnn_output.squeeze(0)
-        context = context.squeeze(1)
-        concat_input = torch.cat((rnn_output, context), 1)
-        concat_output = torch.tanh(self.concat(concat_input))
-        # Predict next word using Luong eq. 6
-        output = self.out(concat_output)
-        output = F.softmax(output, dim=1)
-        # Return output and final hidden state
-        return output, hidden
+        contexts = contexts.view(batch_num, sen_num, token_num, -1)
+        contexts = position_encoding(contexts)
+        contexts = self.dropout(contexts)
+
+        h0 = Variable(torch.zeros(2, batch_num, self.hidden_size).cuda())
+        facts, hdn = self.gru(contexts, h0)
+        facts = facts[:, :, :hidden_size] + facts[:, :, hidden_size:]
+        return facts
 
 
-if __name__ == '__main__':
-    pass
+class AnswerModule(nn.Module):
+    def __init__(self, vocab_size, hidden_size):
+        super(AnswerModule, self).__init__()
+        self.z = nn.Linear(2 * hidden_size, vocab_size)
+        init.xavier_normal_(self.z.state_dict()['weight'])
+        self.dropout = nn.Dropout(0.1)
+
+    def forward(self, M, questions):
+        M = self.dropout(M)
+        concat = torch.cat([M, questions], dim=2).squeeze(1)
+        z = self.z(concat)
+        return z
+
+
+class DMNPlus(nn.Module):
+    def __init__(self, hidden_size, vocab_size, num_hop=3, qa=None):
+        super(DMNPlus, self).__init__()
+        self.num_hop = num_hop
+        self.qa = qa
+        self.word_embedding = nn.Embedding(vocab_size, hidden_size, padding_idx=0, sparse=True).cuda()
+        init.uniform_(self.word_embedding.state_dict()['weight'], a=-(3 ** 0.5), b=3 ** 0.5)
+        self.criterion = nn.CrossEntropyLoss(size_average=False)
+
+        self.input_module = InputModule(vocab_size, hidden_size)
+        self.question_module = QuestionModule(vocab_size, hidden_size)
+        self.memory = EpisodicMemory(hidden_size)
+        self.answer_module = AnswerModule(vocab_size, hidden_size)
+
+    def forward(self, contexts, questions):
+        '''
+        contexts.size() -> (#batch, #sentence, #token) -> (#batch, #sentence, #hidden = #embedding)
+        questions.size() -> (#batch, #token) -> (#batch, 1, #hidden)
+        '''
+        facts = self.input_module(contexts, self.word_embedding)
+        questions = self.question_module(questions, self.word_embedding)
+        M = questions
+        for hop in range(self.num_hop):
+            M = self.memory(facts, questions, M)
+        preds = self.answer_module(M, questions)
+        return preds
+
+    def interpret_indexed_tensor(self, var):
+        if len(var.size()) == 3:
+            # var -> n x #sen x #token
+            for n, sentences in enumerate(var):
+                for i, sentence in enumerate(sentences):
+                    s = ' '.join([self.qa.IVOCAB[elem.data[0]] for elem in sentence])
+                    print('{}th of batch, {}th sentence, {}'.format(n, i, s))
+        elif len(var.size()) == 2:
+            # var -> n x #token
+            for n, sentence in enumerate(var):
+                s = ' '.join([self.qa.IVOCAB[elem.data[0]] for elem in sentence])
+                print('{}th of batch, {}'.format(n, s))
+        elif len(var.size()) == 1:
+            # var -> n (one token per batch)
+            for n, token in enumerate(var):
+                s = self.qa.IVOCAB[token.data[0]]
+                print('{}th of batch, {}'.format(n, s))
+
+    def get_loss(self, contexts, questions, targets):
+        output = self.forward(contexts, questions)
+        loss = self.criterion(output, targets)
+        reg_loss = 0
+        for param in self.parameters():
+            reg_loss += 0.001 * torch.sum(param * param)
+        preds = F.softmax(output, dim=-1)
+        _, pred_ids = torch.max(preds, dim=1)
+        corrects = (pred_ids.data == targets.data)
+        acc = torch.mean(corrects.float())
+        return loss + reg_loss, acc

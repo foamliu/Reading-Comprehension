@@ -1,244 +1,136 @@
+import os
+
 import numpy as np
-from torch import optim
+import torch
+from torch.autograd import Variable
+from torch.utils.data.dataloader import DataLoader
 
-from data_gen import TranslationDataset
-from models import EncoderRNN, LuongAttnDecoderRNN
-from utils import *
-
-
-def train(input_variable, lengths, target_variable, mask, max_target_len, encoder, decoder, encoder_optimizer,
-          decoder_optimizer):
-    # Zero gradients
-    encoder_optimizer.zero_grad()
-    decoder_optimizer.zero_grad()
-
-    # Set device options
-    input_variable = input_variable.to(device)
-    lengths = lengths.to(device)
-    target_variable = target_variable.to(device)
-    mask = mask.to(device)
-
-    # Initialize variables
-    loss = 0
-    print_losses = []
-    n_totals = 0
-
-    # Forward pass through encoder
-    encoder_outputs, encoder_hidden = encoder(input_variable, lengths)
-    # print('encoder_outputs.size(): ' + str(encoder_outputs.size()))
-    # print('encoder_hidden.size(): ' + str(encoder_hidden.size()))
-
-    # Create initial decoder input (start with SOS tokens for each sentence)
-    decoder_input = torch.LongTensor([[SOS_token for _ in range(batch_size)]])
-    decoder_input = decoder_input.to(device)
-    # print('decoder_input.size(): ' + str(decoder_input.size()))
-
-    # Set initial decoder hidden state to the encoder's final hidden state
-    decoder_hidden = encoder_hidden[:decoder.n_layers]
-    # print('decoder_hidden.size(): ' + str(decoder_hidden.size()))
-
-    # Determine if we are using teacher forcing this iteration
-    use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
-    # print('use_teacher_forcing: ' + str(use_teacher_forcing))
-
-    # Forward batch of sequences through decoder one time step at a time
-    if use_teacher_forcing:
-        for t in range(max_target_len):
-            decoder_output, decoder_hidden = decoder(
-                decoder_input, decoder_hidden, encoder_outputs
-            )
-            # Teacher forcing: next input is current target
-            decoder_input = target_variable[t].view(1, -1)
-            # Calculate and accumulate loss
-            mask_loss, nTotal = maskNLLLoss(decoder_output, target_variable[t], mask[t])
-            loss += mask_loss
-            print_losses.append(mask_loss.item() * nTotal)
-            n_totals += nTotal
-    else:
-        for t in range(max_target_len):
-            decoder_output, decoder_hidden = decoder(
-                decoder_input, decoder_hidden, encoder_outputs
-            )
-            # No teacher forcing: next input is decoder's own current output
-            _, topi = decoder_output.topk(1)
-            decoder_input = torch.LongTensor([[topi[i][0] for i in range(batch_size)]])
-            decoder_input = decoder_input.to(device)
-            # Calculate and accumulate loss
-            mask_loss, nTotal = maskNLLLoss(decoder_output, target_variable[t], mask[t])
-            loss += mask_loss
-            print_losses.append(mask_loss.item() * nTotal)
-            n_totals += nTotal
-
-    # Perform backpropatation
-    loss.backward()
-
-    # Clip gradients: gradients are modified in place
-    _ = torch.nn.utils.clip_grad_norm_(encoder.parameters(), clip)
-    _ = torch.nn.utils.clip_grad_norm_(decoder.parameters(), clip)
-
-    # Adjust model weights
-    encoder_optimizer.step()
-    decoder_optimizer.step()
-
-    return sum(print_losses) / n_totals
+from data_gen import AiChallengerDataset, pad_collate
+from models import DMNPlus
+from utils import parse_args
 
 
-def valid(input_variable, lengths, target_variable, mask, max_target_len, encoder, decoder):
-    # Set device options
-    input_variable = input_variable.to(device)
-    lengths = lengths.to(device)
-    target_variable = target_variable.to(device)
-    mask = mask.to(device)
+def train_net(args):
+    torch.manual_seed(7)
+    np.random.seed(7)
 
-    # Initialize variables
-    loss = 0
-    print_losses = []
-    n_totals = 0
+    for run in range(10):
+        for task_id in range(1, 21):
+            dset = AiChallengerDataset(task_id)
+            vocab_size = len(dset.QA.VOCAB)
 
-    with torch.no_grad():
-        # Forward pass through encoder
-        encoder_outputs, encoder_hidden = encoder(input_variable, lengths)
+            model = DMNPlus(args.hidden_size, vocab_size, num_hop=3, qa=dset.QA)
+            model.cuda()
+            early_stopping_cnt = 0
+            early_stopping_flag = False
+            best_acc = 0
+            optim = torch.optim.Adam(model.parameters())
 
-        # Create initial decoder input (start with SOS tokens for each sentence)
-        decoder_input = torch.LongTensor([[SOS_token for _ in range(batch_size)]])
-        decoder_input = decoder_input.to(device)
+            for epoch in range(256):
+                dset.set_mode('train')
+                train_loader = DataLoader(
+                    dset, batch_size=args.batch_size, shuffle=True, collate_fn=pad_collate
+                )
 
-        # Set initial decoder hidden state to the encoder's final hidden state
-        decoder_hidden = encoder_hidden[:decoder.n_layers]
+                model.train()
+                if not early_stopping_flag:
+                    total_acc = 0
+                    cnt = 0
+                    for batch_idx, data in enumerate(train_loader):
+                        optim.zero_grad()
+                        contexts, questions, answers = data
+                        batch_size = contexts.size()[0]
+                        contexts = Variable(contexts.long().cuda())
+                        questions = Variable(questions.long().cuda())
+                        answers = Variable(answers.cuda())
 
-        for t in range(max_target_len):
-            decoder_output, decoder_hidden = decoder(
-                decoder_input, decoder_hidden, encoder_outputs
-            )
-            _, topi = decoder_output.topk(1)
-            decoder_input = torch.LongTensor([[topi[i][0] for i in range(batch_size)]])
-            decoder_input = decoder_input.to(device)
-            # Calculate and accumulate loss
-            mask_loss, nTotal = maskNLLLoss(decoder_output, target_variable[t], mask[t])
-            loss += mask_loss
-            print_losses.append(mask_loss.item() * nTotal)
-            n_totals += nTotal
+                        loss, acc = model.get_loss(contexts, questions, answers)
+                        loss.backward()
+                        total_acc += acc * batch_size
+                        cnt += batch_size
 
-    return sum(print_losses) / n_totals
+                        if batch_idx % 20 == 0:
+                            print(
+                                '[Task {}, Epoch {}] [Training] loss : {}, acc : {:.4f}, batch_idx : {}'.format(task_id,
+                                                                                                                epoch,
+                                                                                                                loss.item(),
+                                                                                                                total_acc / cnt,
+                                                                                                                batch_idx))
+                        optim.step()
+
+                    dset.set_mode('valid')
+                    valid_loader = DataLoader(dset, batch_size=args.batch_size, shuffle=False, collate_fn=pad_collate)
+
+                    model.eval()
+                    total_acc = 0
+                    cnt = 0
+                    for batch_idx, data in enumerate(valid_loader):
+                        contexts, questions, answers = data
+                        batch_size = contexts.size()[0]
+                        contexts = Variable(contexts.long().cuda())
+                        questions = Variable(questions.long().cuda())
+                        answers = Variable(answers.cuda())
+
+                        _, acc = model.get_loss(contexts, questions, answers)
+                        total_acc += acc * batch_size
+                        cnt += batch_size
+
+                    total_acc = total_acc / cnt
+                    if total_acc > best_acc:
+                        best_acc = total_acc
+                        best_state = model.state_dict()
+                        early_stopping_cnt = 0
+                    else:
+                        early_stopping_cnt += 1
+                        if early_stopping_cnt > 20:
+                            early_stopping_flag = True
+
+                    print('[Run {}, Task {}, Epoch {}] [Validate] Accuracy : {:.4f}'.format(run, task_id, epoch,
+                                                                                            total_acc))
+                    with open('log.txt', 'a') as fp:
+                        fp.write('[Run {}, Task {}, Epoch {}] [Validate] Accuracy : {:.4f}\n'.format(
+                            run,
+                            task_id,
+                            epoch,
+                            total_acc))
+                    if total_acc == 1.0:
+                        break
+                else:
+                    print('[Run {}, Task {}] Early Stopping at Epoch {}, Valid Accuracy : {:.4f}'.format(run,
+                                                                                                         task_id,
+                                                                                                         epoch,
+                                                                                                         best_acc))
+                    break
+
+            dset.set_mode('test')
+            test_loader = DataLoader(dset, batch_size=args.batch_size, shuffle=False, collate_fn=pad_collate)
+            test_acc = 0
+            cnt = 0
+
+            for batch_idx, data in enumerate(test_loader):
+                contexts, questions, answers = data
+                batch_size = contexts.size()[0]
+                contexts = Variable(contexts.long().cuda())
+                questions = Variable(questions.long().cuda())
+                answers = Variable(answers.cuda())
+
+                model.load_state_dict(best_state)
+                _, acc = model.get_loss(contexts, questions, answers)
+                test_acc += acc * batch_size
+                cnt += batch_size
+            print('[Run {}, Task {}, Epoch {}] [Test] Accuracy : {:.4f}'.format(run, task_id, epoch, test_acc / cnt))
+            os.makedirs('models', exist_ok=True)
+            with open('models/task{}_epoch{}_run{}_acc{:.4f}.pth'.format(task_id, epoch, run, test_acc / cnt), 'wb') as fp:
+                torch.save(model.state_dict(), fp)
+            with open('log.txt', 'a') as fp:
+                fp.write(
+                    '[Run {}, Task {}, Epoch {}] [Test] Accuracy : {:.4f}\n'.format(run, task_id, epoch, total_acc))
 
 
 def main():
-    input_lang = Lang('data/WORDMAP_en.json')
-    output_lang = Lang('data/WORDMAP_zh.json')
-    print("input_lang.n_words: " + str(input_lang.n_words))
-    print("output_lang.n_words: " + str(output_lang.n_words))
-
-    train_data = TranslationDataset('train')
-    val_data = TranslationDataset('valid')
-
-    # Initialize encoder & decoder models
-    encoder = EncoderRNN(input_lang.n_words, hidden_size, encoder_n_layers, dropout)
-    decoder = LuongAttnDecoderRNN(attn_model, hidden_size, output_lang.n_words, decoder_n_layers, dropout)
-
-    # Use appropriate device
-    encoder = encoder.to(device)
-    decoder = decoder.to(device)
-
-    # Initialize optimizers
-    print('Building optimizers ...')
-    encoder_optimizer = optim.Adam(encoder.parameters(), lr=learning_rate)
-    decoder_optimizer = optim.Adam(decoder.parameters(), lr=learning_rate)
-
-    # Initializations
-    print('Initializing ...')
-    train_batch_time = ExpoAverageMeter()  # forward prop. + back prop. time
-    train_losses = ExpoAverageMeter()  # loss (per word decoded)
-    val_batch_time = ExpoAverageMeter()
-    val_losses = ExpoAverageMeter()
-
-    best_loss = 100000
-    epochs_since_improvement = 0
-
-    # Epochs
-    for epoch in range(start_epoch, epochs):
-        # Decay learning rate if there is no improvement for 8 consecutive epochs, and terminate training after 20
-        if epochs_since_improvement == 20:
-            break
-        if epochs_since_improvement > 0 and epochs_since_improvement % 8 == 0:
-            adjust_learning_rate(decoder_optimizer, 0.8)
-            adjust_learning_rate(encoder_optimizer, 0.8)
-
-        # One epoch's training
-        # Ensure dropout layers are in train mode
-        encoder.train()
-        decoder.train()
-
-        start = time.time()
-
-        # Batches
-        for i_batch in range(len(train_data)):
-            input_variable, lengths, target_variable, mask, max_target_len = train_data[i_batch]
-            train_loss = train(input_variable, lengths, target_variable, mask, max_target_len, encoder, decoder,
-                               encoder_optimizer, decoder_optimizer)
-
-            # Keep track of metrics
-            train_losses.update(train_loss)
-            train_batch_time.update(time.time() - start)
-
-            start = time.time()
-
-            # Print status
-            if i_batch % print_every == 0:
-                print('[{0}] Epoch: [{1}][{2}/{3}]\t'
-                      'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                      'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(timestamp(), epoch, i_batch,
-                                                                      len(train_data),
-                                                                      batch_time=train_batch_time,
-                                                                      loss=train_losses))
-
-        # One epoch's validation
-        start = time.time()
-
-        # Batches
-        for i_batch in range(len(val_data)):
-            input_variable, lengths, target_variable, mask, max_target_len = val_data[i_batch]
-            val_loss = valid(input_variable, lengths, target_variable, mask, max_target_len, encoder, decoder)
-
-            # Keep track of metrics
-            val_losses.update(val_loss)
-            val_batch_time.update(time.time() - start)
-
-            start = time.time()
-
-            # Print status
-            if i_batch % print_every == 0:
-                print('Validation: [{0}/{1}]\t'
-                      'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                      'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(i_batch, len(val_data),
-                                                                      batch_time=val_batch_time,
-                                                                      loss=val_losses))
-
-        val_loss = val_losses.avg
-        print('\n * LOSS - {loss:.3f}\n'.format(loss=val_loss))
-
-        # Check if there was an improvement
-        is_best = val_loss < best_loss
-        best_loss = min(best_loss, val_loss)
-        if not is_best:
-            epochs_since_improvement += 1
-            print("\nEpochs since last improvement: %d\n" % (epochs_since_improvement,))
-        else:
-            epochs_since_improvement = 0
-
-        save_checkpoint(epoch, encoder, decoder, encoder_optimizer, decoder_optimizer, input_lang, output_lang,
-                        val_loss, is_best)
-
-        # Initialize search module
-        searcher = GreedySearchDecoder(encoder, decoder)
-        for input_sentence, target_sentence in pick_n_valid_sentences(input_lang, output_lang, 10):
-            decoded_words = evaluate(searcher, input_sentence, input_lang, output_lang)
-            print('> {}'.format(input_sentence))
-            print('= {}'.format(target_sentence))
-            print('< {}'.format(''.join(decoded_words)))
-
-        # Reshuffle train and valid samples
-        np.random.shuffle(train_data.samples)
-        np.random.shuffle(val_data.samples)
+    global args
+    args = parse_args()
+    train_net(args)
 
 
 if __name__ == '__main__':
