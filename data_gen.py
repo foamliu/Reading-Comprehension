@@ -1,10 +1,10 @@
 import re
-from glob import glob
 
 import numpy as np
-from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 from torch.utils.data.dataset import Dataset
+
+from config import train_path, valid_path, test_a_path
 
 
 class adict(dict):
@@ -36,10 +36,10 @@ def pad_collate(batch):
 
 
 class AiChallengerDataset(Dataset):
-    def __init__(self, task_id, mode='train'):
-        self.vocab_path = 'dataset/babi{}_vocab.pkl'.format(task_id)
+    def __init__(self, mode='train'):
+        self.vocab_path = 'data/vocab.pkl'
         self.mode = mode
-        raw_train, raw_test = get_raw_babi(task_id)
+        raw_train, raw_valid, raw_test = get_raw_data()
         self.QA = adict()
         self.QA.VOCAB = {'<PAD>': 0, '<EOS>': 1}
         self.QA.IVOCAB = {0: '<PAD>', 1: '<EOS>'}
@@ -101,16 +101,14 @@ class AiChallengerDataset(Dataset):
             self.QA.IVOCAB[next_index] = token
 
 
-def get_raw_babi(taskid):
-    paths = glob('data/en-10k/qa{}_*'.format(taskid))
-    for path in paths:
-        if 'train' in path:
-            with open(path, 'r') as fp:
-                train = fp.read()
-        elif 'test' in path:
-            with open(path, 'r') as fp:
-                test = fp.read()
-    return train, test
+def get_raw_data():
+    with open(train_path, 'r') as fp:
+        train = fp.read()
+    with open(valid_path, 'r') as fp:
+        valid = fp.read()
+    with open(test_a_path, 'r') as fp:
+        test = fp.read()
+    return train, valid, test
 
 
 def build_vocab(raw_babi):
@@ -155,7 +153,7 @@ def get_unindexed_qa(raw_babi):
 
 
 if __name__ == '__main__':
-    dset_train = AiChallengerDataset(20, is_train=True)
+    dset_train = AiChallengerDataset()
     train_loader = DataLoader(dset_train, batch_size=2, shuffle=True, collate_fn=pad_collate)
     for batch_idx, data in enumerate(train_loader):
         contexts, questions, answers = data

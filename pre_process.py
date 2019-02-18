@@ -1,11 +1,10 @@
 import json
-import os
 import pickle
 
 import jieba
 from tqdm import tqdm
 
-from config import train_folder, train_filename, min_word_freq
+from config import train_path, min_word_freq
 
 
 def seg_line(line):
@@ -60,17 +59,16 @@ def build_vocab(wordCount, threshold):
 
 def main():
     # 对原始语料分词  注意答案的分词方式是通过语料中的 | 直接分词的
-    path = os.path.join(train_folder, train_filename)
-    data = seg_data(path)
+    data = seg_data(train_path)
 
     # [[question,doc,answer,id],[],[]...]  word_count = {"":}
     word_count = build_word_count(data)
 
-    with open('data/word-count.pickle', 'wb') as f:
+    with open('data/word-count.pkl', 'wb') as f:
         pickle.dump(word_count, f)
 
     vocab = build_vocab(word_count, min_word_freq)  # 对分词之后的建立所有，小于threshold的词将被分成char，然后加入词表
-    with open('data/vocab.pickle', 'wb') as f:
+    with open('data/vocab.pkl', 'wb') as f:
         pickle.dump(vocab, f)
 
 
