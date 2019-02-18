@@ -1,4 +1,5 @@
 import argparse
+import os
 
 
 def parse_args():
@@ -8,3 +9,8 @@ def parse_args():
     parser.add_argument('--batch-size', type=int, default=100, help='batch size')
     args = parser.parse_args()
     return args
+
+
+def ensure_folder(folder):
+    if not os.path.exists(folder):
+        os.makedirs(folder)
