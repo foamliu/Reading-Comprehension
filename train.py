@@ -36,7 +36,7 @@ def train_net(args):
         if not early_stopping_flag:
             total_acc = 0
             cnt = 0
-            for batch_idx, data in enumerate(train_loader):
+            for i, data in enumerate(train_loader):
                 optim.zero_grad()
                 contexts, questions, answers = data
                 batch_size = contexts.size()[0]
@@ -49,12 +49,14 @@ def train_net(args):
                 total_acc += acc * batch_size
                 cnt += batch_size
 
-                if batch_idx % 20 == 0:
+                if i % 20 == 0:
                     logger.info(
-                        '[Epoch {}] [Training] loss : {}, acc : {:.4f}, batch_idx : {}'.format(epoch,
-                                                                                               loss.item(),
-                                                                                               total_acc / cnt,
-                                                                                               batch_idx))
+                        '[Epoch {}][{}/{}] [Training] loss : {}, acc : {:.4f}'.format(epoch,
+                                                                                      i,
+                                                                                      len(train_loader),
+                                                                                      loss.item(),
+                                                                                      total_acc / cnt,
+                                                                                      ))
                 optim.step()
 
             dset.set_mode('valid')
