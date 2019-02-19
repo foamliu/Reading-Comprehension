@@ -221,6 +221,7 @@ class DMNPlus(nn.Module):
         for hop in range(self.num_hop):
             M = self.memory(facts, questions, M)
         preds = self.answer_module(M, questions)
+        preds = torch.gather(preds, 1, alternatives)
         print('preds.size(): ' + str(preds.size()))
         print('alternatives.size(): ' + str(alternatives.size()))
         return preds
