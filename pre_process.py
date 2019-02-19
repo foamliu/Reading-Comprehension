@@ -39,7 +39,7 @@ def get_unindexed_qa(lines):
             answer = item['answer']
         else:
             answer = 'NA'
-        data.append({'Q': question, 'C': doc.split('。'), 'A': answer, 'alter': alternatives.split('|')})
+        data.append({'Q': question, 'C': doc.split('。'), 'A': answer, 'AL': alternatives.split('|')})
     return data
 
 
