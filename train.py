@@ -41,12 +41,12 @@ def train_net(args):
         if not early_stopping_flag:
             for i, data in enumerate(train_loader):
                 optim.zero_grad()
-                contexts, questions, answers = data
+                contexts, questions, answers, alternatives = data
                 contexts = Variable(contexts.long().cuda())
                 questions = Variable(questions.long().cuda())
                 answers = Variable(answers.cuda())
 
-                loss, acc = model.get_loss(contexts, questions, answers)
+                loss, acc = model.get_loss(contexts, questions, alternatives, answers)
                 loss.backward()
 
                 # Keep track of metrics
@@ -72,13 +72,13 @@ def train_net(args):
             total_acc = 0
             cnt = 0
             for batch_idx, data in enumerate(valid_loader):
-                contexts, questions, answers = data
+                contexts, questions, answers, alternatives = data
                 batch_size = contexts.size()[0]
                 contexts = Variable(contexts.long().cuda())
                 questions = Variable(questions.long().cuda())
                 answers = Variable(answers.cuda())
 
-                _, acc = model.get_loss(contexts, questions, answers)
+                _, acc = model.get_loss(contexts, questions, alternatives, answers)
                 total_acc += acc * batch_size
                 cnt += batch_size
 
@@ -107,14 +107,14 @@ def train_net(args):
     cnt = 0
 
     for batch_idx, data in enumerate(test_loader):
-        contexts, questions, answers = data
+        contexts, questions, answers, alternatives = data
         batch_size = contexts.size()[0]
         contexts = Variable(contexts.long().cuda())
         questions = Variable(questions.long().cuda())
         answers = Variable(answers.cuda())
 
         model.load_state_dict(best_state)
-        _, acc = model.get_loss(contexts, questions, answers)
+        _, acc = model.get_loss(contexts, questions, alternatives, answers)
         test_acc += acc * batch_size
         cnt += batch_size
     logger.info('[Epoch {}] [Test] Accuracy : {:.4f}'.format(epoch, test_acc / cnt))

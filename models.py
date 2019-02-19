@@ -210,7 +210,7 @@ class DMNPlus(nn.Module):
         self.memory = EpisodicMemory(hidden_size)
         self.answer_module = AnswerModule(vocab_size, hidden_size)
 
-    def forward(self, contexts, questions):
+    def forward(self, contexts, questions, alternatives):
         '''
         contexts.size() -> (#batch, #sentence, #token) -> (#batch, #sentence, #hidden = #embedding)
         questions.size() -> (#batch, #token) -> (#batch, 1, #hidden)
@@ -221,6 +221,9 @@ class DMNPlus(nn.Module):
         for hop in range(self.num_hop):
             M = self.memory(facts, questions, M)
         preds = self.answer_module(M, questions)
+        print('preds.size(): ' + str(preds.size()))
+        print('alternatives.size(): ' + str(alternatives.size()))
+        print('alternatives: ' + str(alternatives))
         return preds
 
     def interpret_indexed_tensor(self, var):
@@ -241,8 +244,8 @@ class DMNPlus(nn.Module):
                 s = self.qa.IVOCAB[token.data[0]]
                 print('{}th of batch, {}'.format(n, s))
 
-    def get_loss(self, contexts, questions, targets):
-        output = self.forward(contexts, questions)
+    def get_loss(self, contexts, questions, alternatives, targets):
+        output = self.forward(contexts, questions, alternatives)
         loss = self.criterion(output, targets)
         reg_loss = 0
         for param in self.parameters():

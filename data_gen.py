@@ -43,7 +43,7 @@ def get_unindexed_qa(lines):
             answer = item['answer']
         else:
             answer = 'NA'
-        data.append({'Q': question, 'C': doc.split('。'), 'A': answer, 'alter': alternatives.split('|')})
+        data.append({'Q': question, 'C': doc.split('。'), 'A': answer, 'AL': alternatives.split('|')})
     return data
 
 
@@ -112,6 +112,7 @@ class AiChallengerDataset(Dataset):
         questions = []
         contexts = []
         answers = []
+        alternatives = []
         for qa in tqdm(unindexed):
             context = [seg_line(c.strip()) + ['<EOS>'] for c in qa['C']]
 
@@ -128,10 +129,16 @@ class AiChallengerDataset(Dataset):
             self.build_vocab(qa['A'])
             answer = self.QA.VOCAB[qa['A']]
 
+            alternative = qa['AL']
+            for token in alternative:
+                self.build_vocab(token)
+            alternative = [self.QA.VOCAB[token] for token in alternative]
+
             contexts.append(context)
             questions.append(question)
             answers.append(answer)
-        return contexts, questions, answers
+            alternatives.append(alternative)
+        return contexts, questions, answers, alternatives
 
     def build_vocab(self, token):
         if not token in self.QA.VOCAB:
