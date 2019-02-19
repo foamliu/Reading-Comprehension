@@ -49,4 +49,4 @@ if __name__ == '__main__':
         print('原文：' + context)
         print('问题：' + question)
         print('备选：' + alternative)
-        print('答案：' + answer)
+        print('答案：\n' + answer)
