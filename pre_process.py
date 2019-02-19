@@ -4,73 +4,88 @@ import pickle
 import jieba
 from tqdm import tqdm
 
-from config import train_path, min_word_freq
+from config import train_path, valid_path, test_a_path, pickle_file
+
+
+class adict(dict):
+    def __init__(self, *av, **kav):
+        dict.__init__(self, *av, **kav)
+        self.__dict__ = self
 
 
 def seg_line(line):
     return list(jieba.cut(line))
 
 
-def seg_data(path):
-    print('start process ', path)
-    with open(path, 'r', encoding='utf-8') as file:
-        lines = file.readlines()
+def get_raw_data():
+    with open(train_path, 'r', encoding='utf-8') as file:
+        train = file.readlines()
+    with open(valid_path, 'r', encoding='utf-8') as file:
+        valid = file.readlines()
+    with open(test_a_path, 'r', encoding='utf-8') as file:
+        test = file.readlines()
+    return train, valid, test
 
+
+def get_unindexed_qa(lines):
     data = []
 
-    for line in tqdm(lines):
+    for line in lines:
         item = json.loads(line)
         question = item['query']
         doc = item['passage']
         alternatives = item['alternatives']
-        data.append([seg_line(question), seg_line(doc), alternatives.split('|'), item['query_id']])
+        if 'answer' in item.keys():
+            answer = item['answer']
+        else:
+            answer = 'NA'
+        data.append({'Q': question, 'C': doc.split('。'), 'A': answer, 'alter': alternatives.split('|')})
     return data
 
 
-def build_word_count(data):
-    wordCount = {}
+def get_indexed_qa(raw_data):
+    print('get indexed qa...')
+    unindexed = get_unindexed_qa(raw_data)
+    questions = []
+    contexts = []
+    answers = []
+    for qa in tqdm(unindexed):
+        context = [seg_line(c.strip()) + ['<EOS>'] for c in qa['C']]
 
-    def add_count(lst):
-        for word in lst:
-            if word not in wordCount:
-                wordCount[word] = 0
-            wordCount[word] += 1
+        for con in context:
+            for token in con:
+                build_vocab(token)
+        context = [[QA.VOCAB[token] for token in sentence] for sentence in context]
+        question = seg_line(qa['Q']) + ['<EOS>']
 
-    for one in data:
-        [add_count(x) for x in one[0:3]]
-    print('vocab size ', len(wordCount))
-    return wordCount
+        for token in question:
+            build_vocab(token)
+        question = [QA.VOCAB[token] for token in question]
 
+        build_vocab(qa['A'])
+        answer = QA.VOCAB[qa['A']]
 
-def build_vocab(wordCount, threshold):
-    vocab = {'<PAD>': 0, '<EOS>': 1}
-    for word in wordCount:
-        if wordCount[word] >= threshold:
-            if word not in vocab:
-                vocab[word] = len(vocab)
-        else:
-            chars = list(word)
-            for char in chars:
-                if char not in vocab:
-                    vocab[char] = len(vocab)
-    print('processed vocab size ', len(vocab))
-    return vocab
+        contexts.append(context)
+        questions.append(question)
+        answers.append(answer)
+    return contexts, questions, answers
 
 
-def main():
-    # 对原始语料分词  注意答案的分词方式是通过语料中的 | 直接分词的
-    data = seg_data(train_path)
-
-    # [[question,doc,answer,id],[],[]...]  word_count = {"":}
-    word_count = build_word_count(data)
-
-    with open('data/word-count.pkl', 'wb') as f:
-        pickle.dump(word_count, f)
-
-    vocab = build_vocab(word_count, min_word_freq)  # 对分词之后的建立所有，小于threshold的词将被分成char，然后加入词表
-    with open('data/vocab.pkl', 'wb') as f:
-        pickle.dump(vocab, f)
+def build_vocab(self, token):
+    if not token in self.QA.VOCAB:
+        next_index = len(self.QA.VOCAB)
+        self.QA.VOCAB[token] = next_index
+        self.QA.IVOCAB[next_index] = token
 
 
 if __name__ == '__main__':
-    main()
+    raw_train, raw_valid, raw_test = get_raw_data()
+    QA = adict()
+    QA.VOCAB = {'<PAD>': 0, '<EOS>': 1}
+    QA.IVOCAB = {0: '<PAD>', 1: '<EOS>'}
+    data = dict()
+    data['train'] = get_indexed_qa(raw_train)
+    data['valid'] = get_indexed_qa(raw_valid)
+    data['test'] = get_indexed_qa(raw_test)
+    with open(pickle_file, 'w') as file:
+        pickle.dump(data, file)

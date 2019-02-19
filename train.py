@@ -5,6 +5,7 @@ import torch
 from torch.autograd import Variable
 from torch.utils.data.dataloader import DataLoader
 
+from config import print_freq
 from data_gen import AiChallengerDataset, pad_collate
 from models import DMNPlus
 from utils import parse_args, get_logger
@@ -49,7 +50,7 @@ def train_net(args):
                 total_acc += acc * batch_size
                 cnt += batch_size
 
-                if i % 20 == 0:
+                if i % print_freq == 0:
                     logger.info(
                         '[Epoch {}][{}/{}] [Training] loss : {}, acc : {:.4f}'.format(epoch,
                                                                                       i,

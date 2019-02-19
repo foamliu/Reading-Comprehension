@@ -1,4 +1,5 @@
 import json
+import pickle
 
 import jieba
 import numpy as np
@@ -7,7 +8,7 @@ from torch.utils.data.dataloader import default_collate
 from torch.utils.data.dataset import Dataset
 from tqdm import tqdm
 
-from config import train_path, valid_path, test_a_path
+from config import train_path, valid_path, test_a_path, pickle_file
 
 
 class adict(dict):
@@ -70,15 +71,18 @@ def pad_collate(batch):
 
 class AiChallengerDataset(Dataset):
     def __init__(self, mode='train'):
-        self.vocab_path = 'data/vocab.pkl'
-        self.mode = mode
-        raw_train, raw_valid, raw_test = get_raw_data()
-        self.QA = adict()
-        self.QA.VOCAB = {'<PAD>': 0, '<EOS>': 1}
-        self.QA.IVOCAB = {0: '<PAD>', 1: '<EOS>'}
-        self.train = self.get_indexed_qa(raw_train)
-        self.valid = self.get_indexed_qa(raw_valid)
-        self.test = self.get_indexed_qa(raw_test)
+        # self.vocab_path = 'data/vocab.pkl'
+        # self.mode = mode
+        # raw_train, raw_valid, raw_test = get_raw_data()
+        # self.QA = adict()
+        # self.QA.VOCAB = {'<PAD>': 0, '<EOS>': 1}
+        # self.QA.IVOCAB = {0: '<PAD>', 1: '<EOS>'}
+        with open(pickle_file, 'r') as file:
+            data = pickle.load(file)
+
+        self.train = data['train']
+        self.valid = data['valid']
+        self.test = data['test']
 
     def set_mode(self, mode):
         self.mode = mode
