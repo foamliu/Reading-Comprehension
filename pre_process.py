@@ -84,6 +84,7 @@ if __name__ == '__main__':
     QA.VOCAB = {'<PAD>': 0, '<EOS>': 1}
     QA.IVOCAB = {0: '<PAD>', 1: '<EOS>'}
     data = dict()
+    data['QA'] = QA
     data['train'] = get_indexed_qa(raw_train)
     data['valid'] = get_indexed_qa(raw_valid)
     data['test'] = get_indexed_qa(raw_test)

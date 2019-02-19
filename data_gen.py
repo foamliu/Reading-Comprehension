@@ -80,6 +80,7 @@ class AiChallengerDataset(Dataset):
         with open(pickle_file, 'rb') as file:
             data = pickle.load(file)
 
+        self.QA = data['QA']
         self.train = data['train']
         self.valid = data['valid']
         self.test = data['test']
