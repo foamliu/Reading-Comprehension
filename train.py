@@ -40,6 +40,8 @@ def train_net(args):
             for i, data in enumerate(train_loader):
                 optim.zero_grad()
                 contexts, questions, answers, alternatives = data
+                print('type(questions): ' + str(type(questions)))
+                print('type(alternatives): ' + str(type(alternatives)))
                 contexts = Variable(contexts.long().cuda())
                 questions = Variable(questions.long().cuda())
                 alternatives = Variable(alternatives.long().cuda())
