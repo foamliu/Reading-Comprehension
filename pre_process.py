@@ -87,5 +87,5 @@ if __name__ == '__main__':
     data['train'] = get_indexed_qa(raw_train)
     data['valid'] = get_indexed_qa(raw_valid)
     data['test'] = get_indexed_qa(raw_test)
-    with open(pickle_file, 'w') as file:
+    with open(pickle_file, 'wb') as file:
         pickle.dump(data, file)

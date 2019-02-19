@@ -77,7 +77,7 @@ class AiChallengerDataset(Dataset):
         # self.QA = adict()
         # self.QA.VOCAB = {'<PAD>': 0, '<EOS>': 1}
         # self.QA.IVOCAB = {0: '<PAD>', 1: '<EOS>'}
-        with open(pickle_file, 'r') as file:
+        with open(pickle_file, 'rb') as file:
             data = pickle.load(file)
 
         self.train = data['train']
