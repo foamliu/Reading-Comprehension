@@ -3,7 +3,6 @@ import random
 import torch
 from torch.autograd import Variable
 from torch.utils.data.dataloader import DataLoader
-from tqdm import tqdm
 
 from config import batch_size
 from data_gen import AiChallengerDataset
@@ -21,26 +20,10 @@ if __name__ == '__main__':
 
     test_samples = range(len(dset))
     _ids = random.sample(test_samples, 10)
-    contexts = []
-    questions = []
-    alternatives = []
-
-    for id in _ids:
-        context = dset[id][0]
-        context = [''.join([dset.QA.IVOCAB[id] for id in sentence]) for sentence in context]
-        context = '。'.join(context)
-        question = dset[id][1]
-        question = ''.join([dset.QA.IVOCAB[id] for id in question])
-        alternative = dset[id][3]
-        alternative = [dset.QA.IVOCAB[id] for id in alternative]
-        alternative = '|'.join(alternative)
-        print(context)
-        print(question)
-        print(alternative)
 
     _pred_ids = []
 
-    for i, data in tqdm(enumerate(test_loader)):
+    for i, data in enumerate(test_loader):
         contexts, questions, _, alternatives = data
         contexts = Variable(contexts.long().cuda())
         questions = Variable(questions.long().cuda())
@@ -49,3 +32,21 @@ if __name__ == '__main__':
         preds = model.forward(contexts, questions, alternatives)
         _, pred_ids = torch.max(preds, dim=1)
         _pred_ids += list(pred_ids.cpu().numpy())
+
+    for id in _ids:
+        context = dset[id][0]
+        context = [''.join([dset.QA.IVOCAB[id] for id in sentence]) for sentence in context]
+        context = '。'.join(context).replace('<EOS>', '')
+        question = dset[id][1]
+        question = ''.join([dset.QA.IVOCAB[id] for id in question]).replace('<EOS>', '')
+        alternative = dset[id][3]
+        alternative = [dset.QA.IVOCAB[id] for id in alternative]
+
+        pred_id = _pred_ids[id]
+        answer = alternative[pred_id]
+        alternative = '|'.join(alternative)
+
+        print('原文：' + context)
+        print('问题：' + question)
+        print('备选：' + alternative)
+        print('答案：' + answer)
