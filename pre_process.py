@@ -1,5 +1,6 @@
 import json
 import pickle
+import random
 
 import jieba
 from tqdm import tqdm
@@ -63,13 +64,15 @@ def get_indexed_qa(raw_data):
             build_vocab(token)
         question = [QA.VOCAB[token] for token in question]
 
-        build_vocab(qa['A'])
-        answer = QA.VOCAB[qa['A']]
-
         alternative = qa['AL']
         for token in alternative:
             build_vocab(token)
         alternative = [QA.VOCAB[token] for token in alternative]
+        random.shuffle(alternative)
+
+        build_vocab(qa['A'])
+        answer = QA.VOCAB[qa['A']]
+        answer = alternative.index(answer)
 
         contexts.append(context)
         questions.append(question)
