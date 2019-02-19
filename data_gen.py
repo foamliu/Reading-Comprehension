@@ -62,18 +62,18 @@ class AiChallengerDataset(Dataset):
 
     def __getitem__(self, index):
         if self.mode == 'train':
-            contexts, questions, answers = self.train
+            contexts, questions, answers, alternatives = self.train
         elif self.mode == 'valid':
-            contexts, questions, answers = self.valid
+            contexts, questions, answers, alternatives = self.valid
         elif self.mode == 'test':
-            contexts, questions, answers = self.test
-        return contexts[index], questions[index], answers[index]
+            contexts, questions, answers, alternatives = self.test
+        return contexts[index], questions[index], answers[index], alternatives[index]
 
 
 if __name__ == '__main__':
     dset_train = AiChallengerDataset()
     train_loader = DataLoader(dset_train, batch_size=2, shuffle=True, collate_fn=pad_collate)
     for batch_idx, data in enumerate(train_loader):
-        contexts, questions, answers = data
+        contexts, questions, answers, alternatives = data
         break
     print(len(dset_train.QA.VOCAB))
