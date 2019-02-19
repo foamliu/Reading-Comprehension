@@ -72,7 +72,7 @@ def pad_collate(batch):
 class AiChallengerDataset(Dataset):
     def __init__(self, mode='train'):
         # self.vocab_path = 'data/vocab.pkl'
-        # self.mode = mode
+        self.mode = mode
         # raw_train, raw_valid, raw_test = get_raw_data()
         # self.QA = adict()
         # self.QA.VOCAB = {'<PAD>': 0, '<EOS>': 1}
