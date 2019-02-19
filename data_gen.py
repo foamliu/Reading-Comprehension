@@ -19,20 +19,20 @@ def pad_collate(batch):
     max_context_len = float('-inf')
     max_question_len = float('-inf')
     for elem in batch:
-        context, question, _ = elem
+        context, question, _, _ = elem
         max_context_len = max_context_len if max_context_len > len(context) else len(context)
         max_question_len = max_question_len if max_question_len > len(question) else len(question)
         for sen in context:
             max_context_sen_len = max_context_sen_len if max_context_sen_len > len(sen) else len(sen)
     max_context_len = min(max_context_len, 70)
     for i, elem in enumerate(batch):
-        _context, question, answer = elem
+        _context, question, answer, alternative = elem
         _context = _context[-max_context_len:]
         context = np.zeros((max_context_len, max_context_sen_len))
         for j, sen in enumerate(_context):
             context[j] = np.pad(sen, (0, max_context_sen_len - len(sen)), 'constant', constant_values=0)
         question = np.pad(question, (0, max_question_len - len(question)), 'constant', constant_values=0)
-        batch[i] = (context, question, answer)
+        batch[i] = (context, question, answer, alternative)
     return default_collate(batch)
 
 
