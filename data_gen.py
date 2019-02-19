@@ -74,13 +74,14 @@ class AiChallengerDataset(Dataset):
         # self.vocab_path = 'data/vocab.pkl'
         self.mode = mode
         # raw_train, raw_valid, raw_test = get_raw_data()
-        # self.QA = adict()
+        self.QA = adict()
         # self.QA.VOCAB = {'<PAD>': 0, '<EOS>': 1}
         # self.QA.IVOCAB = {0: '<PAD>', 1: '<EOS>'}
         with open(pickle_file, 'rb') as file:
             data = pickle.load(file)
 
-        self.QA = data['QA']
+        self.QA.VOCAB = data['VOCAB']
+        self.QA.IVOCAB = data['IVOCAB']
         self.train = data['train']
         self.valid = data['valid']
         self.test = data['test']
