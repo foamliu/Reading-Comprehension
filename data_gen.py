@@ -75,5 +75,7 @@ if __name__ == '__main__':
     train_loader = DataLoader(dset_train, batch_size=2, shuffle=True, collate_fn=pad_collate)
     for batch_idx, data in enumerate(train_loader):
         contexts, questions, answers, alternatives = data
+        print('type(questions): ' + str(type(questions)))
+        print('type(alternatives): ' + str(type(alternatives)))
         break
     print(len(dset_train.QA.VOCAB))
