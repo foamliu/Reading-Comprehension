@@ -27,7 +27,7 @@ if __name__ == '__main__':
 
     for id in _ids:
         context = dset[id][0]
-        context = [''.join([dset.QA.VOCAB[id] for id in sentence]) for sentence in context]
+        context = [''.join([dset.QA.IVOCAB[id] for id in sentence]) for sentence in context]
         context = '。'.join(context)
         question = dset[id][1]
         question = ''.join([dset.QA.IVOCAB[id] for id in question])
