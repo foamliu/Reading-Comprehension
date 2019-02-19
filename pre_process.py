@@ -71,11 +71,11 @@ def get_indexed_qa(raw_data):
     return contexts, questions, answers
 
 
-def build_vocab(self, token):
-    if not token in self.QA.VOCAB:
-        next_index = len(self.QA.VOCAB)
-        self.QA.VOCAB[token] = next_index
-        self.QA.IVOCAB[next_index] = token
+def build_vocab(token):
+    if not token in QA.VOCAB:
+        next_index = len(QA.VOCAB)
+        QA.VOCAB[token] = next_index
+        QA.IVOCAB[next_index] = token
 
 
 if __name__ == '__main__':
