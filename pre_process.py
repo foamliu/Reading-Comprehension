@@ -43,7 +43,7 @@ def build_word_count(data):
 
 
 def build_vocab(wordCount, threshold):
-    vocab = {'<PAD>': 0, '<UNK>': 1}
+    vocab = {'<PAD>': 0, '<EOS>': 1}
     for word in wordCount:
         if wordCount[word] >= threshold:
             if word not in vocab:

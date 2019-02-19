@@ -38,13 +38,12 @@ class AiChallengerDataset(Dataset):
     def __init__(self, mode='train'):
         self.vocab_path = 'data/vocab.pkl'
         self.mode = mode
-        raw_train, raw_valid, raw_test = get_raw_data()
+        raw_data, raw_valid, raw_test = get_raw_data(mode)
         self.QA = adict()
         self.QA.VOCAB = {'<PAD>': 0, '<EOS>': 1}
         self.QA.IVOCAB = {0: '<PAD>', 1: '<EOS>'}
-        self.train = self.get_indexed_qa(raw_train)
-        self.valid = [self.train[i][int(-len(self.train[i]) / 10):] for i in range(3)]
-        self.train = [self.train[i][:int(9 * len(self.train[i]) / 10)] for i in range(3)]
+        self.data = self.get_indexed_qa(raw_data)
+        self.valid = self.get_indexed_qa(raw_valid)
         self.test = self.get_indexed_qa(raw_test)
 
     def set_mode(self, mode):
