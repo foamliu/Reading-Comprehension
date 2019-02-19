@@ -44,6 +44,7 @@ def train_net(args):
                 contexts, questions, answers, alternatives = data
                 contexts = Variable(contexts.long().cuda())
                 questions = Variable(questions.long().cuda())
+                alternatives = Variable(alternatives.long().cuda())
                 answers = Variable(answers.cuda())
 
                 loss, acc = model.get_loss(contexts, questions, alternatives, answers)
@@ -76,6 +77,7 @@ def train_net(args):
                 batch_size = contexts.size()[0]
                 contexts = Variable(contexts.long().cuda())
                 questions = Variable(questions.long().cuda())
+                alternatives = Variable(alternatives.long().cuda())
                 answers = Variable(answers.cuda())
 
                 _, acc = model.get_loss(contexts, questions, alternatives, answers)
@@ -111,6 +113,7 @@ def train_net(args):
         batch_size = contexts.size()[0]
         contexts = Variable(contexts.long().cuda())
         questions = Variable(questions.long().cuda())
+        alternatives = Variable(alternatives.long().cuda())
         answers = Variable(answers.cuda())
 
         model.load_state_dict(best_state)
