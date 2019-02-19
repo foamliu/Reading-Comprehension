@@ -8,7 +8,7 @@ from torch.utils.data.dataloader import DataLoader
 from config import print_freq
 from data_gen import AiChallengerDataset, pad_collate
 from models import DMNPlus
-from utils import parse_args, get_logger
+from utils import parse_args, get_logger, AverageMeter
 
 
 def train_net(args):
@@ -34,30 +34,35 @@ def train_net(args):
         )
 
         model.train()
+
+        losses = AverageMeter()
+        accs = AverageMeter()
+
         if not early_stopping_flag:
-            total_acc = 0
-            cnt = 0
             for i, data in enumerate(train_loader):
                 optim.zero_grad()
                 contexts, questions, answers = data
-                batch_size = contexts.size()[0]
                 contexts = Variable(contexts.long().cuda())
                 questions = Variable(questions.long().cuda())
                 answers = Variable(answers.cuda())
 
                 loss, acc = model.get_loss(contexts, questions, answers)
                 loss.backward()
-                total_acc += acc * batch_size
-                cnt += batch_size
+
+                # Keep track of metrics
+                losses.update(loss.item())
+                accs.update(acc)
 
                 if i % print_freq == 0:
                     logger.info(
-                        '[Epoch {}][{}/{}] [Training] loss : {}, acc : {:.4f}'.format(epoch,
-                                                                                      i,
-                                                                                      len(train_loader),
-                                                                                      loss.item(),
-                                                                                      total_acc / cnt,
-                                                                                      ))
+                        '[Epoch {}][{}/{}] [Training]\t'
+                        'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                        'Accuracy {accs.val:.3f} ({accs.avg:.3f})'.format(epoch,
+                                                                          i,
+                                                                          len(train_loader),
+                                                                          loss=losses,
+                                                                          accs=accs
+                                                                          ))
                 optim.step()
 
             dset.set_mode('valid')
