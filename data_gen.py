@@ -32,6 +32,7 @@ def pad_collate(batch):
         for j, sen in enumerate(_context):
             context[j] = np.pad(sen, (0, max_context_sen_len - len(sen)), 'constant', constant_values=0)
         question = np.pad(question, (0, max_question_len - len(question)), 'constant', constant_values=0)
+        alternative = np.array(alternative)
         batch[i] = (context, question, answer, alternative)
     return default_collate(batch)
 
