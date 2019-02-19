@@ -222,8 +222,8 @@ class DMNPlus(nn.Module):
             M = self.memory(facts, questions, M)
         preds = self.answer_module(M, questions)
         print('preds.size(): ' + str(preds.size()))
-        print('alternatives.size(): ' + str(alternatives.size()))
-        print('alternatives: ' + str(alternatives))
+        print('type(alternatives): ' + str(type(alternatives)))
+        print('len(alternatives): ' + str(len(alternatives)))
         return preds
 
     def interpret_indexed_tensor(self, var):
