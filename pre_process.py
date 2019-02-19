@@ -49,6 +49,7 @@ def get_indexed_qa(raw_data):
     questions = []
     contexts = []
     answers = []
+    alternatives = []
     for qa in tqdm(unindexed):
         context = [seg_line(c.strip()) + ['<EOS>'] for c in qa['C']]
 
@@ -65,10 +66,16 @@ def get_indexed_qa(raw_data):
         build_vocab(qa['A'])
         answer = QA.VOCAB[qa['A']]
 
+        alternative = qa['AL']
+        for token in alternative:
+            build_vocab(token)
+        alternative = [QA.VOCAB[token] for token in alternative]
+
         contexts.append(context)
         questions.append(question)
         answers.append(answer)
-    return contexts, questions, answers
+        alternatives.append(alternative)
+    return contexts, questions, answers, alternatives
 
 
 def build_vocab(token):
