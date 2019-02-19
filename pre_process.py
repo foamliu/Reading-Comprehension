@@ -39,7 +39,7 @@ def get_unindexed_qa(lines):
         if 'answer' in item.keys():
             answer = item['answer']
         else:
-            answer = 'NA'
+            answer = '<PAD>'
         data.append({'Q': question, 'C': doc.split('。'), 'A': answer, 'AL': alternatives.split('|')})
     return data
 
@@ -70,9 +70,13 @@ def get_indexed_qa(raw_data):
         alternative = [QA.VOCAB[token] for token in alternative]
         random.shuffle(alternative)
 
-        build_vocab(qa['A'])
-        answer = QA.VOCAB[qa['A']]
-        answer = alternative.index(answer)
+        answer = qa['A']
+        if not answer == '<PAD>':
+            build_vocab(answer)
+            answer = QA.VOCAB[answer]
+            answer = alternative.index(answer)
+        else:
+            answer = 0
 
         contexts.append(context)
         questions.append(question)
