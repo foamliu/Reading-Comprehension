@@ -29,9 +29,7 @@ def train_net(args):
 
     for epoch in range(256):
         dset.set_mode('train')
-        train_loader = DataLoader(
-            dset, batch_size=args.batch_size, shuffle=True, collate_fn=pad_collate
-        )
+        train_loader = DataLoader(dset, batch_size=args.batch_size, shuffle=True, collate_fn=pad_collate)
 
         model.train()
 
