@@ -1,7 +1,11 @@
+import json
+
+import jieba
 import numpy as np
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataloader import default_collate
 from torch.utils.data.dataset import Dataset
+from tqdm import tqdm
 
 from config import train_path, valid_path, test_a_path
 
@@ -10,6 +14,36 @@ class adict(dict):
     def __init__(self, *av, **kav):
         dict.__init__(self, *av, **kav)
         self.__dict__ = self
+
+
+def seg_line(line):
+    return list(jieba.cut(line))
+
+
+def get_raw_data():
+    with open(train_path, 'r', encoding='utf-8') as file:
+        train = file.readlines()
+    with open(valid_path, 'r', encoding='utf-8') as file:
+        valid = file.readlines()
+    with open(test_a_path, 'r', encoding='utf-8') as file:
+        test = file.readlines()
+    return train, valid, test
+
+
+def get_unindexed_qa(lines):
+    data = []
+
+    for line in lines:
+        item = json.loads(line)
+        question = item['query']
+        doc = item['passage']
+        alternatives = item['alternatives']
+        if 'answer' in item.keys():
+            answer = item['answer']
+        else:
+            answer = 'NA'
+        data.append({'Q': question, 'C': doc.split('。'), 'A': answer, 'alter': alternatives.split('|')})
+    return data
 
 
 def pad_collate(batch):
@@ -38,11 +72,11 @@ class AiChallengerDataset(Dataset):
     def __init__(self, mode='train'):
         self.vocab_path = 'data/vocab.pkl'
         self.mode = mode
-        raw_data, raw_valid, raw_test = get_raw_data(mode)
+        raw_train, raw_valid, raw_test = get_raw_data()
         self.QA = adict()
         self.QA.VOCAB = {'<PAD>': 0, '<EOS>': 1}
         self.QA.IVOCAB = {0: '<PAD>', 1: '<EOS>'}
-        self.data = self.get_indexed_qa(raw_data)
+        self.train = self.get_indexed_qa(raw_train)
         self.valid = self.get_indexed_qa(raw_valid)
         self.test = self.get_indexed_qa(raw_test)
 
@@ -67,29 +101,31 @@ class AiChallengerDataset(Dataset):
         return contexts[index], questions[index], answers[index]
 
     def get_indexed_qa(self, raw_data):
+        print('get indexed qa...')
+        unindexed = get_unindexed_qa(raw_data)
         questions = []
         contexts = []
         answers = []
-        for qa in raw_data:
-            context = [c.lower().split() + ['<EOS>'] for c in qa['C']]
+        for qa in tqdm(unindexed):
+            context = [seg_line(c.strip()) + ['<EOS>'] for c in qa['C']]
 
             for con in context:
                 for token in con:
                     self.build_vocab(token)
             context = [[self.QA.VOCAB[token] for token in sentence] for sentence in context]
-            question = qa['Q'].lower().split() + ['<EOS>']
+            question = seg_line(qa['Q']) + ['<EOS>']
 
             for token in question:
                 self.build_vocab(token)
             question = [self.QA.VOCAB[token] for token in question]
 
-            self.build_vocab(qa['A'].lower())
-            answer = self.QA.VOCAB[qa['A'].lower()]
+            self.build_vocab(qa['A'])
+            answer = self.QA.VOCAB[qa['A']]
 
             contexts.append(context)
             questions.append(question)
             answers.append(answer)
-        return (contexts, questions, answers)
+        return contexts, questions, answers
 
     def build_vocab(self, token):
         if not token in self.QA.VOCAB:
@@ -98,19 +134,10 @@ class AiChallengerDataset(Dataset):
             self.QA.IVOCAB[next_index] = token
 
 
-def get_raw_data():
-    with open(train_path, 'r') as file:
-        train = file.readlines()
-    with open(valid_path, 'r') as file:
-        valid = file.readlines()
-    with open(test_a_path, 'r') as file:
-        test = file.readlines()
-    return train, valid, test
-
-
 if __name__ == '__main__':
     dset_train = AiChallengerDataset()
     train_loader = DataLoader(dset_train, batch_size=2, shuffle=True, collate_fn=pad_collate)
     for batch_idx, data in enumerate(train_loader):
         contexts, questions, answers = data
         break
+    print(len(dset_train.QA.VOCAB))

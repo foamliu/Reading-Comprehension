@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 
 
@@ -14,3 +15,13 @@ def parse_args():
 def ensure_folder(folder):
     if not os.path.exists(folder):
         os.makedirs(folder)
+
+
+def get_logger():
+    logger = logging.getLogger()
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter("%(asctime)s %(levelname)s \t%(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+    return logger
