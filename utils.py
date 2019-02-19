@@ -2,6 +2,8 @@ import argparse
 import logging
 import os
 
+import torch
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='train DMN+')
@@ -46,3 +48,16 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+
+def save_checkpoint(epoch, epochs_since_improvement, model, optimizer, acc, is_best):
+    state = {'epoch': epoch,
+             'epochs_since_improvement': epochs_since_improvement,
+             'acc': acc,
+             'model': model,
+             'optimizer': optimizer}
+    filename = 'checkpoint.tar'
+    torch.save(state, filename)
+    # If this checkpoint is the best so far, store a copy so it doesn't get overwritten by a worse checkpoint
+    if is_best:
+        torch.save(state, 'BEST_checkpoint.tar')
