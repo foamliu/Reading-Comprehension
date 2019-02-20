@@ -16,14 +16,14 @@ if __name__ == '__main__':
 
     dset = AiChallengerDataset()
     dset.set_mode('valid')
-    test_loader = DataLoader(dset, batch_size=batch_size, shuffle=False, collate_fn=pad_collate)
+    valid_loader = DataLoader(dset, batch_size=batch_size, shuffle=False, collate_fn=pad_collate)
 
-    test_samples = range(len(dset))
-    _ids = random.sample(test_samples, 10)
+    chosen_samples = range(len(dset))
+    _ids = random.sample(chosen_samples, 10)
 
     _pred_ids = []
 
-    for i, data in enumerate(test_loader):
+    for i, data in enumerate(valid_loader):
         contexts, questions, _, alternatives = data
         contexts = Variable(contexts.long().cuda())
         questions = Variable(questions.long().cuda())
@@ -41,7 +41,7 @@ if __name__ == '__main__':
         context = '。'.join(context).replace('<EOS>', '')
         question = dset[id][1]
         question = ''.join([dset.QA.IVOCAB[id] for id in question]).replace('<EOS>', '')
-        answer = dset[id][2]
+        answer = dset[id][3][dset[id][2]]
         answer = dset.QA.IVOCAB[answer]
         alternative = dset[id][3]
         alternative = [dset.QA.IVOCAB[id] for id in alternative]
