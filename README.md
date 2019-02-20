@@ -1,5 +1,7 @@
 # 阅读理解
 
+![apm](https://img.shields.io/apm/l/vim-mode.svg)
+
 机器阅读理解是指让计算机阅读文本，随后让计算机解答与文中信息相关的问题。本代码库用 PyTorch 实现 DMN+ 模型,  以解决AI Challenger 2018 中的观点型问题阅读理解挑战。
 
 
