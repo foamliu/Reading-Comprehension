@@ -33,6 +33,8 @@ if __name__ == '__main__':
         _, pred_ids = torch.max(preds, dim=1)
         _pred_ids += list(pred_ids.cpu().numpy())
 
+    print('len(_pred_ids): ' + str(len(_pred_ids)))
+
     for id in _ids:
         context = dset[id][0]
         context = [''.join([dset.QA.IVOCAB[id] for id in sentence]) for sentence in context]
