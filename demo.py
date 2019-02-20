@@ -15,7 +15,7 @@ if __name__ == '__main__':
     model.eval()
 
     dset = AiChallengerDataset()
-    dset.set_mode('test')
+    dset.set_mode('valid')
     test_loader = DataLoader(dset, batch_size=batch_size, shuffle=False, collate_fn=pad_collate)
 
     test_samples = range(len(dset))
