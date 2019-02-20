@@ -50,9 +50,9 @@ if __name__ == '__main__':
         pred = alternative[pred_id]
         alternative = '|'.join(alternative)
 
-        print('原文：' + context)
-        print('问题：' + question)
-        print('备选：' + alternative)
-        print('人类回答：' + answer)
-        print('电脑回答：' + pred)
+        print('文章：' + context)
+        print('提问：' + question)
+        print('备选答案：' + alternative)
+        print('人类抢答：' + answer)
+        print('电脑抢答：' + pred)
         print()
