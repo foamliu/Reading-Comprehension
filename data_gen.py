@@ -36,8 +36,8 @@ def pad_collate(batch):
         batch[i] = (context, question, answer, alternative)
         print('context.shape: ' + str(context.shape))
         print('question.shape: ' + str(question.shape))
-        print('answer.shape: ' + str(answer.shape))
         print('alternative.shape: ' + str(alternative.shape))
+        print('answer: ' + str(answer))
     return default_collate(batch)
 
 
