@@ -34,10 +34,10 @@ def pad_collate(batch):
         question = np.pad(question, (0, max_question_len - len(question)), 'constant', constant_values=0)
         alternative = np.array(alternative)
         batch[i] = (context, question, answer, alternative)
-        print('context.shape: ' + str(context.shape))
-        print('question.shape: ' + str(question.shape))
-        print('alternative.shape: ' + str(alternative.shape))
-        print('answer: ' + str(answer))
+        # print('context.shape: ' + str(context.shape))
+        # print('question.shape: ' + str(question.shape))
+        # print('alternative.shape: ' + str(alternative.shape))
+        # print('answer: ' + str(answer))
     return default_collate(batch)
 
 
