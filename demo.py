@@ -41,14 +41,18 @@ if __name__ == '__main__':
         context = '。'.join(context).replace('<EOS>', '')
         question = dset[id][1]
         question = ''.join([dset.QA.IVOCAB[id] for id in question]).replace('<EOS>', '')
+        answer = dset[id][2]
+        answer = dset.QA.IVOCAB[answer]
         alternative = dset[id][3]
         alternative = [dset.QA.IVOCAB[id] for id in alternative]
 
         pred_id = _pred_ids[id]
-        answer = alternative[pred_id]
+        pred = alternative[pred_id]
         alternative = '|'.join(alternative)
 
         print('原文：' + context)
         print('问题：' + question)
         print('备选：' + alternative)
-        print('答案：\n' + answer)
+        print('人类回答：' + answer)
+        print('电脑回答：' + pred)
+        print()
