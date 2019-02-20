@@ -53,6 +53,6 @@ if __name__ == '__main__':
         print('文章：' + context)
         print('提问：' + question)
         print('备选答案：' + alternative)
-        print('人类抢答：' + answer)
+        print('标准答案：' + answer)
         print('电脑抢答：' + pred)
         print()
