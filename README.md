@@ -52,7 +52,7 @@ $ python train.py
 ```
 
 ### Demo
-下载 [预训练模型](https://github.com/foamliu/Machine-Translation/releases/download/v1.0/BEST_checkpoint.tar) 放在 models 目录然后执行:
+下载 [预训练模型](https://github.com/foamliu/Reading-Comprehension/releases/download/v1.0/BEST_checkpoint.tar) 放在 models 目录然后执行:
 
 ```bash
 $ python demo.py
